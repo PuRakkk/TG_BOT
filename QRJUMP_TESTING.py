@@ -7,6 +7,11 @@ import nest_asyncio
 import asyncio
 from datetime import datetime
 import psycopg2
+from fastapi import FastAPI, Request
+import uvicorn
+from fastapi.responses import JSONResponse
+
+logging.basicConfig(level=logging.INFO)
 
 DB_HOST = "localhost"
 DB_NAME = "ezzeqr_db"
@@ -15,10 +20,12 @@ DB_PASS = "chessmandb987"
 
 TK = "7659326826:AAEUrUmsC0sbl92zR8LDC7vzBOyY9ULCgV4"
 
-WEBHOOK_URL = "https://ezzecore1.mobi:8444/qrjump-bot"
-PORT = 8444
-
+WEBHOOK_URL = "https://b8be-110-235-223-133.ngrok-free.app/qrjump-bot"
+PORT = 8443
 TELEGRAM_URL = f"https://api.telegram.org/bot{TK}/setWebhook?url={WEBHOOK_URL}"
+
+app = FastAPI()
+bot_app = None
 
 FETCH_USER_INFORMATION = """SELECT telegram_id, user_status, user_choose_language, phone_number FROM qrjump_users_storage WHERE telegram_id = %s"""
 
@@ -29,6 +36,21 @@ logging.basicConfig(
     level=logging.DEBUG, 
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+@app.post("/qrjump-bot")
+async def webhook(request: Request):
+    update_data = await request.json()
+    logging.info(f"Received update: {update_data}")
+    
+    if bot_app:
+        try:
+            update = Update.de_json(update_data, bot_app.bot)
+            await bot_app.update_queue.put(update)
+            logging.info("Update forwarded to bot application")
+        except Exception as e:
+            logging.error(f"Error processing update: {e}")
+    
+    return JSONResponse(content={"status": "ok"})
 
 async def set_command(user_language,tg_id):
     app = Application.builder().token(TK).build()
@@ -80,7 +102,7 @@ async def set_command(user_language,tg_id):
 
 def set_webhook():
     try:
-        response = requests.get(TELEGRAM_URL)
+        response = requests.get(f"https://api.telegram.org/bot{TK}/setWebhook?url={WEBHOOK_URL}")
         logging.info(f"Webhook set successfully: {response.json()}")
         return response.json()
     except Exception as e:
@@ -135,6 +157,7 @@ def update_users_language(telegramId,user_language):
         cursor.close()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    print("The start function is working...")
     user = update.effective_user
     telegram_id = user.id
     first_name = user.first_name
@@ -353,7 +376,7 @@ async def keypad(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(telegram_username)
 
     result = fetch_language(telegram_id)    
-    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://da9b-167-179-41-221.ngrok-free.app/?telegram_id={telegram_id}&telegram_username={telegram_username}"))]]
+    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://4a8a-110-235-223-133.ngrok-free.app/?telegram_id={telegram_id}&telegram_username={telegram_username}"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_khmer_message = """សូមចុចលើ NEXT ដើម្បីចូលទៅ KeyPad"""
     welcome_english_message = """Please click on NEXT to go to KeyPad"""
@@ -426,24 +449,44 @@ async def get_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(f"សូមស្វាគមន៍មកកាន់ admin! តើខ្ញុំអាចជួយអ្នកអ្វីខ្លះ, {fullname} \n Admin: @Sarak_chon",reply_markup=ReplyKeyboardRemove())
     elif result[1] == 0:
         return
+    
+async def setup_bot():
+    global bot_app
+    bot_app = Application.builder().token(TK).build()
+    bot_app.add_handler(CommandHandler("start",start))
+    bot_app.add_handler(CommandHandler("keypad",keypad))
+    bot_app.add_handler(CommandHandler("ezzetopup",ezzetopup))
+    bot_app.add_handler(CommandHandler("change_language",language_btn))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, language_choice))
+    bot_app.add_handler(CommandHandler("share_contact",share_contact))
+    bot_app.add_handler(MessageHandler(filters.CONTACT, process_contact))
+    bot_app.add_handler(CommandHandler("help",get_help))
 
-async def main():
-    app = Application.builder().token(TK).build()
-    app.add_handler(CommandHandler("start",start))
-    app.add_handler(CommandHandler("keypad",keypad))
-    app.add_handler(CommandHandler("ezzetopup",ezzetopup))
-    app.add_handler(CommandHandler("change_language",language_btn))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, language_choice))
-    app.add_handler(CommandHandler("share_contact",share_contact))
-    app.add_handler(MessageHandler(filters.CONTACT, process_contact))
-    app.add_handler(CommandHandler("help",get_help))
+    await bot_app.bot.set_webhook(WEBHOOK_URL)
+    logging.info("Webhook configured successfully")
+    await bot_app.initialize()
+    await bot_app.start()
 
-    await app.run_polling()
+async def shutdown():
+    if bot_app:
+        await bot_app.stop()
+        await bot_app.shutdown()
 
 if __name__ == '__main__':
-
     nest_asyncio.apply()
+    
+    loop = asyncio.get_event_loop()
+    
+    loop.run_until_complete(setup_bot())
+    
+    config = uvicorn.Config(app, host="0.0.0.0", port=PORT)
+    server = uvicorn.Server(config)
+    
+    try:
+        logging.info("Starting server...")
+        loop.run_until_complete(server.serve())
+    finally:
+        logging.info("Shutting down...")
+        loop.run_until_complete(shutdown())
 
-    set_webhook()
-
-    asyncio.run(main())
+    
