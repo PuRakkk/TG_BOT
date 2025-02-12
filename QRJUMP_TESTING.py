@@ -18,14 +18,14 @@ DB_NAME = "ezzeqr_db"
 DB_USER = "PuRak"
 DB_PASS = "chessmandb987"
 
-TK = "7659326826:AAEUrUmsC0sbl92zR8LDC7vzBOyY9ULCgV4"
+TK = "7301149253:AAFN0bx9UjNYrHNHvcqaB3PeNaxnUeySzA8"
 
-WEBHOOK_URL = "https://b8be-110-235-223-133.ngrok-free.app/qrjump-bot"
-PORT = 8443
+WEBHOOK_URL = "https://f5a6-110-235-223-133.ngrok-free.app/qrjump-bot"
+PORT = 8000
 TELEGRAM_URL = f"https://api.telegram.org/bot{TK}/setWebhook?url={WEBHOOK_URL}"
 
 app = FastAPI()
-bot_app = None
+bot_app = None  
 
 FETCH_USER_INFORMATION = """SELECT telegram_id, user_status, user_choose_language, phone_number FROM qrjump_users_storage WHERE telegram_id = %s"""
 
