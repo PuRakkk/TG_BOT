@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, ReplyKeyboardRemove, ReplyKeyboardMarkup, KeyboardButton, BotCommand
 import logging
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler,CallbackContext
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 import requests
 import json
 import nest_asyncio
@@ -20,7 +20,7 @@ DB_PASS = "chessmandb987"
 
 TK = "7301149253:AAFN0bx9UjNYrHNHvcqaB3PeNaxnUeySzA8"
 
-WEBHOOK_URL = "https://f5a6-110-235-223-133.ngrok-free.app/qrjump-bot"
+WEBHOOK_URL = "https://b29a-118-67-205-137.ngrok-free.app/qrjump-bot"
 PORT = 8000
 TELEGRAM_URL = f"https://api.telegram.org/bot{TK}/setWebhook?url={WEBHOOK_URL}"
 
@@ -39,8 +39,11 @@ logging.basicConfig(
 
 @app.post("/qrjump-bot")
 async def webhook(request: Request):
+    if request.method != "POST":
+        return JSONResponse(content={"error": "Method not allowed"}, status_code=405)
+
     update_data = await request.json()
-    logging.info(f"Received update: {update_data}")
+    logging.info(f"Received update: {update_data}") 
     
     if bot_app:
         try:
@@ -100,14 +103,14 @@ async def set_command(user_language,tg_id):
     except Exception as e:
         logging.error(f"Error updating commands: {e}")
 
-def set_webhook():
-    try:
-        response = requests.get(f"https://api.telegram.org/bot{TK}/setWebhook?url={WEBHOOK_URL}")
-        logging.info(f"Webhook set successfully: {response.json()}")
-        return response.json()
-    except Exception as e:
-        logging.error(f"Error setting webhook: {e}")
-        return None
+# def set_webhook():
+#     try:
+#         response = requests.get(f"https://api.telegram.org/bot{TK}/setWebhook?url={WEBHOOK_URL}")           
+#         logging.info(f"Webhook set successfully: {response.json()}")
+#         return response.json()
+#     except Exception as e:
+#         logging.error(f"Error setting webhook: {e}")
+#         return None
 
 def fetch_language(telegramId):
     telegram_id = telegramId
@@ -167,7 +170,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     telegram_language = user.language_code
     visiter = "Human" if not user.is_bot else "Bot"
     created_at = global_date.strftime("%Y-%m-%d %H:%M")
-    user_status = 1
+    user_status = "Pending"
 
     logging.info(f"Start command initiated by {full_name} (ID: {telegram_id})")
 
@@ -177,19 +180,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         verify_telegram_id = result[0]
         verify_user_status =  result[1]
         verify_user_choose_language = result[2]
+
+        print(verify_user_status)
     else:
         verify_telegram_id, verify_user_status, verify_user_choose_language = None, None, None
 
-    if verify_telegram_id == telegram_id and verify_user_status == 1 and verify_user_choose_language == "English":
+    if verify_telegram_id == telegram_id and verify_user_status == "Active" and verify_user_choose_language == "English":
         await update.message.reply_text(f"Welcome, {full_name} Glad to have you here!", reply_markup=ReplyKeyboardRemove())
         logging.info(f"User {full_name} (ID: {telegram_id}) successfully logged in (English).")
 
-    elif verify_telegram_id == telegram_id and verify_user_status == 1 and verify_user_choose_language == "Khmer":
+    elif verify_telegram_id == telegram_id and verify_user_status == "Active" and verify_user_choose_language == "Khmer":
         await update.message.reply_text(f"សូមស្វាគមន៍, {full_name} រីករាយដែលបានជួបអ្នក!", reply_markup=ReplyKeyboardRemove())
         logging.info(f"User {full_name} (ID: {telegram_id}) successfully logged in (Khmer).")
 
-    elif verify_telegram_id == telegram_id and verify_user_status == 0:
-        await update.message.reply_text("You got banned from the bot")
+    elif verify_telegram_id == telegram_id and verify_user_status == "Inactive":
+        await update.message.reply_text("Your account is Inactive. Please contact admin")
+        logging.warning(f"User {full_name} (ID: {telegram_id}) banned from bot. Please contact Admin:@Chon_sarak")
+    
+    elif verify_telegram_id == telegram_id and verify_user_status == "Pending":
+        await update.message.reply_text("Your account is in pending. Please wait for approving.")
         logging.warning(f"User {full_name} (ID: {telegram_id}) banned from bot. Please contact Admin:@Chon_sarak")
 
     elif result == None or result[2] == None:
@@ -223,7 +232,7 @@ async def language_btn(update:Update, context:ContextTypes.DEFAULT_TYPE) -> None
     
     result = fetch_language(telegram_id)
 
-    if result[1] == 1:
+    if result[1] == "Active":
         en_button = KeyboardButton("🇬🇧 English")
         kh_button = KeyboardButton("🇰🇭 Khmer")
 
@@ -238,9 +247,27 @@ async def language_btn(update:Update, context:ContextTypes.DEFAULT_TYPE) -> None
             await update.message.reply_text("សូមជ្រើសរើសភាសារបស់អ្នក:",reply_markup=language_reply_remark)
         else:
             await update.message.reply_text("Please choose a valid language",reply_markup=language_reply_remark)
-    elif result[1] == 0:
-        return
+    elif result[1] == "Inactive":
+        if result[2] == "English":
+            await update.message.reply_text("Your account is inactive. Please contact your admin.")
+        elif result == "Khmer":
+            await update.message.reply_text("គណនីរបស់អ្នកត្រូវបានបិទ។ សូមទាក់ទងអ្នកគ្រប់គ្រងរបស់អ្នក។")
 
+    elif result[2] == None:
+        en_button = KeyboardButton("🇬🇧 English")
+        kh_button = KeyboardButton("🇰🇭 Khmer")
+
+        language_keyboard_button = [[en_button, kh_button]]
+
+        language_reply_remark = ReplyKeyboardMarkup(language_keyboard_button, resize_keyboard=True, one_time_keyboard=True)
+
+        await update.message.reply_text("Please choose your language:",reply_markup=language_reply_remark)
+
+    elif result[1] == "Pending":
+        if result[2] == "English":
+            await update.message.reply_text("Your account is in pending. Please wait for approving.")
+        elif result[2] == "Khmer":
+            await update.message.reply_text("គណនីរបស់អ្នកកំពុងស្នើសុំការចុះឈ្មោះ។ សូមរង់ចាំការយល់ព្រម។")
 
 async def language_choice(update:Update, context:ContextTypes.DEFAULT_TYPE) -> None:
 
@@ -257,7 +284,7 @@ async def language_choice(update:Update, context:ContextTypes.DEFAULT_TYPE) -> N
 
         if result[2] == None:
             await update.message.reply_text("You have selected English 🇬🇧", reply_markup=ReplyKeyboardRemove())
-            await update.message.reply_text(f"Welcome {full_name} to QR Jump! Please choose in Menu")
+            await update.message.reply_text(f"Welcome {full_name} to QR Jump! Your account is currently in pending, please contact your admin to approve.")
         elif result[2] == "English":
             await set_command("English",telegram_id)
             await update.message.reply_text("You have selected English 🇬🇧", reply_markup=ReplyKeyboardRemove())
@@ -274,7 +301,7 @@ async def language_choice(update:Update, context:ContextTypes.DEFAULT_TYPE) -> N
         
         if result[2] == None:
             await update.message.reply_text("អ្នកបានជ្រើសរើសភាសាខ្មែរ 🇰🇭", reply_markup=ReplyKeyboardRemove())
-            await update.message.reply_text(f"សូមស្វាគមន៏​ {full_name} មកកាន់​​ QRJump! សូមជ្រើសរើសក្នុងមីនុយ ឬ Menu")
+            await update.message.reply_text(f"សូមស្វាគមន៍ {full_name} មកកាន់ QR Jump! បច្ចុប្បន្នគណនីរបស់អ្នកកំពុងស្នើសុំការចុះឈ្មោះ សូមទាក់ទងអ្នកគ្រប់គ្រងរបស់អ្នកដើម្បីយល់ព្រម។")
         elif result[2] == "Khmer":
             await set_command("Khmer",telegram_id)
             await update.message.reply_text("អ្នកបានជ្រើសរើសភាសាខ្មែរ 🇰🇭", reply_markup=ReplyKeyboardRemove())
@@ -292,8 +319,13 @@ async def share_contact(update:Update, context:ContextTypes.DEFAULT_TYPE) -> Non
         telegram_id = user.id
         result = fetch_language(telegram_id)
 
-        if result[3] is None:
-            if result[1] == 1:
+        if result[1] == "Pending":
+            if result[2] == "English":
+                await update.message.reply_text("Your account is in pending. Please wait for approving.")
+            elif result[2] == "Khmer":
+                await update.message.reply_text("គណនីរបស់អ្នកកំពុងស្នើសុំការចុះឈ្មោះ។ សូមរង់ចាំការយល់ព្រម។")
+        elif result[1] == "Active":
+            if result[3] is None:
                 share_contact_btn = None
                 if result[2] == "English":
                     share_contact_btn = KeyboardButton("📞Share your contact", request_contact=True)
@@ -308,12 +340,14 @@ async def share_contact(update:Update, context:ContextTypes.DEFAULT_TYPE) -> Non
                     await update.message.reply_text(
                         "Please share your contact" if result[2] == "English" else "សូមចែករំលែកព័ត៌មានទំនាក់ទំនងរបស់អ្នក",
                         reply_markup=share_contact_reply_markup)
-            elif result[1] == 0:
-                    return
-        elif result:
-            await update.message.reply_text("You are already shared contact" if result[2] == "English" else "អ្នកបានចែករំលែកទំនាក់ទំនងរួចហើយ")
+            elif result:
+                await update.message.reply_text("You are already shared contact" if result[2] == "English" else "អ្នកបានចែករំលែកទំនាក់ទំនងរួចហើយ")
+        elif result[1] == "Inactive":
+            if result[2] == "English":
+                await update.message.reply_text("Your account is inactive. Please contact your admin.")
+            elif result == "Khmer":
+                await update.message.reply_text("គណនីរបស់អ្នកត្រូវបានបិទ។ សូមទាក់ទងអ្នកគ្រប់គ្រងរបស់អ្នក។")
             
-
 async def process_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     contact = update.message.contact
 
@@ -376,28 +410,37 @@ async def keypad(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(telegram_username)
 
     result = fetch_language(telegram_id)    
-    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://4a8a-110-235-223-133.ngrok-free.app/?telegram_id={telegram_id}&telegram_username={telegram_username}"))]]
+    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://b29a-118-67-205-137.ngrok-free.app/?version=v1.1&telegram_id={telegram_id}&telegram_username={telegram_username}"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_khmer_message = """សូមចុចលើ NEXT ដើម្បីចូលទៅ KeyPad"""
     welcome_english_message = """Please click on NEXT to go to KeyPad"""
     
-    if result[1] == 1:
-            if result[2] == "Khmer":
-                if update.callback_query:
-                    await update.callback_query.message.reply_text(welcome_khmer_message,reply_markup=reply_markup)
-                    await update.callback_query.answer()
-                elif update.message:
-                    await update.message.reply_text(welcome_khmer_message, reply_markup=reply_markup)
+    if result[1] == "Active":
+        if result[2] == "Khmer":
+            if update.callback_query:
+                await update.callback_query.message.reply_text(welcome_khmer_message,reply_markup=reply_markup)
+                await update.callback_query.answer()
+            elif update.message:
+                await update.message.reply_text(welcome_khmer_message, reply_markup=reply_markup)
 
-            elif result[2] == "English":
-                if update.callback_query:
-                    await update.callback_query.message.reply_text(welcome_english_message, reply_markup=reply_markup)
-                    await update.callback_query.answer()
-                elif update.message:
-                    await update.message.reply_text(welcome_english_message, reply_markup=reply_markup) 
+        elif result[2] == "English":
+            if update.callback_query:
+                await update.callback_query.message.reply_text(welcome_english_message, reply_markup=reply_markup)
+                await update.callback_query.answer()
+            elif update.message:
+                await update.message.reply_text(welcome_english_message, reply_markup=reply_markup) 
 
-    elif result[1] == 0:
-        return
+    elif result[1] == "Inactive":
+        if result[2] == "English":
+                await update.message.reply_text("Your account is inactive. Please contact your admin.")
+        elif result == "Khmer":
+            await update.message.reply_text("គណនីរបស់អ្នកត្រូវបានបិទ។ សូមទាក់ទងអ្នកគ្រប់គ្រងរបស់អ្នក។")
+
+    elif result[1] == "Pending":
+        if result[2] == "English":
+                await update.message.reply_text("Your account is in pending. Please wait for approving.")
+        elif result[2] == "Khmer":
+            await update.message.reply_text("គណនីរបស់អ្នកកំពុងស្នើសុំការចុះឈ្មោះ។ សូមរង់ចាំការយល់ព្រម។")
 
 async def ezzetopup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -408,28 +451,37 @@ async def ezzetopup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(telegram_username)
 
     result = fetch_language(telegram_id)    
-    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://4e15-167-179-41-221.ngrok-free.app/?telegram_id={telegram_id}&telegram_username={telegram_username}"))]]
+    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://ezzecore1.mobi:8445/?telegram_id={telegram_id}&telegram_username={telegram_username}"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_khmer_message = """សូមចុចលើ NEXT ដើម្បីចូលទៅ EZZE Topup"""
     welcome_english_message = """Please click on NEXT to go EZZE Topup"""
     
-    if result[1] == 1:
-            if result[2] == "Khmer":
-                if update.callback_query:
-                    await update.callback_query.message.reply_text(welcome_khmer_message,reply_markup=reply_markup)
-                    await update.callback_query.answer()
-                elif update.message:
-                    await update.message.reply_text(welcome_khmer_message, reply_markup=reply_markup)
+    if result[1] == "Active":
+        if result[2] == "Khmer":
+            if update.callback_query:
+                await update.callback_query.message.reply_text(welcome_khmer_message,reply_markup=reply_markup)
+                await update.callback_query.answer()
+            elif update.message:
+                await update.message.reply_text(welcome_khmer_message, reply_markup=reply_markup)
 
-            elif result[2] == "English":
-                if update.callback_query:
-                    await update.callback_query.message.reply_text(welcome_english_message, reply_markup=reply_markup)
-                    await update.callback_query.answer()
-                elif update.message:
-                    await update.message.reply_text(welcome_english_message, reply_markup=reply_markup) 
+        elif result[2] == "English":
+            if update.callback_query:
+                await update.callback_query.message.reply_text(welcome_english_message, reply_markup=reply_markup)
+                await update.callback_query.answer()
+            elif update.message:
+                await update.message.reply_text(welcome_english_message, reply_markup=reply_markup) 
 
-    elif result[1] == 0:
-        return
+    elif result[1] == "Inactive":
+        if result[2] == "English":
+                await update.message.reply_text("Your account is inactive. Please contact your admin.")
+        elif result == "Khmer":
+            await update.message.reply_text("គណនីរបស់អ្នកត្រូវបានបិទ។ សូមទាក់ទងអ្នកគ្រប់គ្រងរបស់អ្នក។")
+
+    elif result[1] == "Pending":
+        if result[2] == "English":
+                await update.message.reply_text("Your account is in pending. Please wait for approving.")
+        elif result[2] == "Khmer":
+            await update.message.reply_text("គណនីរបស់អ្នកកំពុងស្នើសុំការចុះឈ្មោះ។ សូមរង់ចាំការយល់ព្រម។")
 
 async def get_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -441,14 +493,11 @@ async def get_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     result = fetch_language(telegram_id)
 
-    if result[1] == 1:
-        if result[2] == "English":
-            await update.message.reply_text(f"Welcome to admin! What can I help you, {fullname} \n Admin: @Sarak_chon",reply_markup=ReplyKeyboardRemove())
-        
-        elif result[2] == "Khmer":
-            await update.message.reply_text(f"សូមស្វាគមន៍មកកាន់ admin! តើខ្ញុំអាចជួយអ្នកអ្វីខ្លះ, {fullname} \n Admin: @Sarak_chon",reply_markup=ReplyKeyboardRemove())
-    elif result[1] == 0:
-        return
+    if result[2] == "English":
+        await update.message.reply_text(f"Welcome to admin! What can I help you, {fullname} \n Admin: @Sarak_chon",reply_markup=ReplyKeyboardRemove())
+    
+    elif result[2] == "Khmer":
+        await update.message.reply_text(f"សូមស្វាគមន៍មកកាន់ admin! តើខ្ញុំអាចជួយអ្នកអ្វីខ្លះ, {fullname} \n Admin: @Sarak_chon",reply_markup=ReplyKeyboardRemove())
     
 async def setup_bot():
     global bot_app

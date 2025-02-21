@@ -10,10 +10,10 @@ import psycopg2
 
 DB_HOST = "localhost"
 DB_NAME = "ezzeqr_db"
-DB_USER = "purak"
+DB_USER = "PuRak"
 DB_PASS = "chessmandb987"
 
-TK = "7659326826:AAEUrUmsC0sbl92zR8LDC7vzBOyY9ULCgV4"
+TK = "7301149253:AAFN0bx9UjNYrHNHvcqaB3PeNaxnUeySzA8"
 
 WEBHOOK_URL = "https://ezzecore1.mobi:8444/qrjump-bot"
 
@@ -347,7 +347,7 @@ async def website(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     result = fetch_language(telegram_id)
 
-    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://dd4f-175-100-10-23.ngrok-free.app?telegram_id={telegram_id}"))]]
+    keyboard = [[InlineKeyboardButton("NEXT", web_app=WebAppInfo(url=f"https://99e9-118-67-205-137.ngrok-free.app?telegram_id={telegram_id}"))]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_khmer_message = """សូមចុចលើ NEXT ដើម្បីចូលទៅ QR Jump"""
     welcome_english_message = """Please click on NEXT to go to QR Jump"""
